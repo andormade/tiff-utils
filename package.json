@@ -1,0 +1,22 @@
+{
+  "name": "tiff-utils",
+  "version": "0.0.1",
+  "description": "Utility functions for parsing TIFFs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andormade/tiff-utils.git"
+  },
+  "keywords": [
+    "tiff"
+  ],
+  "author": "Andor Polgar",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/andormade/tiff-utils/issues"
+  },
+  "homepage": "https://github.com/andormade/tiff-utils#readme"
+}
