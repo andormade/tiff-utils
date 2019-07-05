@@ -1,4 +1,4 @@
-const { BYTE, LONG, SHORT, ASCII, RATIONAL, IFD } = require('./ifdEntryTypes');
+const { BYTE, LONG, SHORT, ASCII, RATIONAL, IFD } = require('./types');
 
 /**
  * Replaces the old SubfileType field, due to limitations in the definition of
@@ -28,6 +28,27 @@ const NewSubfileType = {
 	type: LONG,
 	count: 1,
 	default: 0,
+};
+
+/**
+ * Currently defined values are:
+ *
+ * 1 = full-resolution image data
+ * 2 = reduced-resolution image data
+ * 3 = a single page of a multi-page image (see the PageNumber field
+ * description).
+ *
+ * Note that several image types may be found in a single TIFF file, with each 
+ * subfile described by its own IFD.
+ *
+ * No default.
+ * 
+ * This field is deprecated. The NewSubfileType field should be used instead.
+ */
+const SubfileType = {
+	tag: 255,
+	type: SHORT,
+	count: 1,
 };
 
 /**
@@ -174,6 +195,26 @@ const PhotometricInterpretation = {
 };
 
 /**
+ * For black and white TIFF files that represent shades of gray, the technique
+ * used to convert from gray to black and white pixels.
+ *
+ * 1 = No dithering or halftoning has been applied to the image data.
+ * 2 = An ordered dither or halftone technique has been applied to the image
+ * data.
+ * 3 = A randomized process such as error diffusion has been applied to the 
+ * image data. 
+ *
+ * Default is Threshholding = 1. 
+ * See also CellWidth, CellLength.
+ */
+const Thresholding = {
+	tag: 263,
+	type: SHORT,
+	count: 1,
+	default: 1,
+};
+
+/**
  * The width of the dithering or halftoning matrix used to create a dithered or
  * halftoned bilevel file.
  * No default. See also Threshholding.
@@ -233,10 +274,19 @@ const FillOrder = {
 };
 
 /**
+ * The name of the document from which this image was scanned.
+ * See also PageName
+ */
+const DocumentName = {
+	tag: 269,
+	type: ASCII,
+};
+
+/**
  * A string that describes the subject of the image.
  *
- * For example, a user may wish to attach a comment such as “1988 company
- * picnic” to an image.
+ * For example, a user may wish to attach a comment such as "1988 company
+ * picnic" to an image.
  */
 const ImageDescription = {
 	tag: 270,
@@ -322,7 +372,7 @@ const StripOffsets = {
  */
 const Orientation = {
 	tag: 274,
-	type: [SHORT],
+	type: SHORT,
 	count: 1,
 	default: 1,
 };
@@ -339,7 +389,7 @@ const Orientation = {
  */
 const SamplesPerPixel = {
 	tag: 277,
-	type: [SHORT],
+	type: SHORT,
 	count: 1,
 	default: 1,
 };
@@ -369,7 +419,7 @@ const SamplesPerPixel = {
  * Use of a single strip is not recommended. Choose RowsPerStrip such that each
  * strip is about 8K bytes, even if the data is not compressed, since it makes
  * buffering simpler for readers.
- * The “8K” value is fairly arbitrary, but seems to work well.
+ * The "8K" value is fairly arbitrary, but seems to work well.
  *
  * See also ImageLength, StripOffsets, StripByteCounts, TileWidth, TileLength,
  * TileOffsets, TileByteCounts.
@@ -458,7 +508,7 @@ const YResolution = {
  * PhotometricInterpretation. For example, for RGB data, the data is stored as
  * RGBRGBRGB…
  *
- * 2 = Planar format. The components are stored in separate “component planes.”
+ * 2 = Planar format. The components are stored in separate "component planes."
  * The values in StripOffsets and StripByteCounts are then arranged as a
  * 2-dimensional array, with SamplesPerPixel rows and StripsPerImage columns.
  * (All of the columns for row 0 are stored first, followed by the columns of
@@ -476,7 +526,7 @@ const YResolution = {
  * included.
  *
  * If a row interleave effect is desired, a writer might write out the data as
- * PlanarConfiguration=2—separate sample planes—but break up the planes into
+ * PlanarConfiguration=2--separate sample planes--but break up the planes into
  * multiple strips (one row per strip, perhaps) and interleave the strips.
  *
  * Default is 1. See also BitsPerSample, SamplesPerPixel.
@@ -559,6 +609,203 @@ const GrayResponseCurve = {
 };
 
 /**
+ * See Compression=3. This field is made up of a set of 32 flag bits. Unused 
+ * bits must be set to 0. Bit 0 is the low-order bit.
+ *
+ * Bit 0 is 1 for 2-dimensional coding (otherwise 1-dimensional is assumed).
+ * For 2-D coding, if more than one strip is specified, each strip must begin
+ * with a 1-dimensionally coded line. That is, RowsPerStrip should be a 
+ * multiple of “Param- eter K,” as documented in the CCITT specification.
+ *
+ * Bit 1 is 1 if uncompressed mode is used.
+ * Bit 2 is 1 if fill bits have been added as necessary before EOL codes such
+ * that EOL always ends on a byte boundary, thus ensuring an EOL-sequence of 1
+ * byte preceded by a zero nibble: xxxx-0000 0000-0001.
+ * 
+ * Default is 0, for basic 1-dimensional coding. See also Compression.
+ */
+const T4Options = {
+	tag: 292,
+	type: LONG,
+	count: 1,
+	default: 0,
+};
+
+/**
+ * SeeCompression=4. Thisfieldismadeupofasetof32flagbits. Unusedbits must be
+ * set to 0. Bit 0 is the low-order bit. The default value is 0 (all bits 0).
+ *
+ * bit 0 is unused and always 0.
+ * bit 1 is 1 if uncompressed mode is allowed in the encoding.
+ *
+ * In earlier versions of TIFF, this tag was named Group4Options. The
+ * significance has not changed and the present definition is compatible. The
+ * name of the tag has been changed to be consistent with the nomenclature of 
+ * other T.6-encoding applications.
+ *
+ * Readers should honor this option tag, and only this option tag, whenever 
+ * T.6-Encoding is specified for Compression.
+ *
+ * For T.6-Encoding, each segment (strip or tile) is encoded as if it were a
+ * separate image. The encoded string from each segment starts a fresh byte.
+ *
+ * There are no one-dimensional line encodings in T.6-Encoding. Instead, even 
+ * the first row of the segment’s pixel array is encoded two-dimensionally by 
+ * always assuming an invisible preceding row of all-white pixels. The 2-
+ * dimensional procedure for encoding the body of individual rows is the same
+ * as that used for 2- dimensional T.4-encoding and is described fully in the 
+ * CCITT specifications.
+ *
+ * The beginning of the encoding for each row of a strip or tile is conducted
+ * as if there is an imaginary preceding (0-width) white pixel, that is as if
+ * a fresh run of white pixels has just commenced. The completion of each line
+ * is encoded as if there are imaginary pixels beyond the end of the current
+ * line, and of the preceding line, in effect, of colors chosen such that the
+ * line is exactly completable by a code word, making the imaginary next pixel
+ * a changing element that’s not actually used.
+ *
+ * The encodings of successive lines follow contiguously in the binary T.6-
+ * Encoding stream with no special initiation or separation codewords. There
+ * are no provisions for fill codes or explicit end-of-line indicators. The
+ * encoding of the last line of the pixel array is followed immediately, in 
+ * place of any additional line encodings, by a 24-bit End-of-Facsimile Block
+ * (EOFB).
+ *
+ * 000000000001000000000001.B.
+ *
+ * The EOFB sequence is immediately followed by enough 0-bit padding to fit the
+ * entire stream into a sequence of 8-bit bytes.
+ *
+ * General Application. Because of the single uniform encoding procedure, 
+ * without disruptions by end-of-line codes and shifts into one-dimensional
+ * encodings, T.6- encoding is very popular for compression of bi-level images
+ * in document imaging systems. T.6-encoding trades off redundancy for minimum
+ * encoded size, relying on the underlying storage and transmission systems for
+ * reliable retention and communication of the encoded stream.
+ * 
+ * TIFF readers will operate most smoothly by always ignoring bits beyond the
+ * EOFB. Some writers may produce additional bytes of pad bits beyond the byte
+ * containing the final bit of the EOFB. Robust readers will not be disturbed
+ * by this prospect.
+ *
+ * It is not possible to correctly decode a T.6-Encoding without knowledge of 
+ * the exact number of pixels in each line of the pixel array. ImageWidth (or
+ * TileWidth, if used) must be stated exactly and accurately. If an image or
+ * segment is overscanned, producing extraneous pixels at the beginning or 
+ * ending of lines, these pixels must be counted. Any cropping must be
+ * accomplished by other means. It is not possible to recover from a 
+ * pixel-count deviation, even when one is detected. Failure of any row to be
+ * completed as expected is cause for abandoning further decoding of the entire
+ * segment. There is no requirement that ImageWidth be a multiple of eight, of
+ * course, and readers must be prepared to pad the final octet bytes of decoded
+ * bitmap rows with additional bits.
+ *
+ * 
+ * If a TIFF reader encounters EOFB before the expected number of lines has
+ * been extracted, it is appropriate to assume that the missing rows consist
+ * entirely of white pixels. Cautious readers might produce an unobtrusive
+ * warning if such an EOFB is followed by anything other than pad bits.
+ *
+ * Readers that successfully decode the RowsPerStrip (or TileLength or residual
+ * ImageLength) number of lines are not required to verify that an EOFB 
+ * follows. That is, it is generally appropriate to stop decoding when the
+ * expected lines are decoded or the EOFB is detected, whichever occurs first.
+ * Whether error indica- tions or warnings are also appropriate depends upon 
+ * the application and whether more precise troubleshooting of encoding
+ * deviations is important.
+ *
+ * TIFF writers should always encode the full, prescribed number of rows, with
+ * a proper EOFB immediately following in the encoding. Padding should be by 
+ * the least number of 0-bits needed for the T.6-encoding to exactly occupy a
+ * multiple of 8 bits. Only 0-bits should be used for padding, and 
+ * StripByteCount (or TileByteCount) should not extend to any bytes not
+ * containing properly-formed T.6-encoding. In addition, even though not 
+ * required by T.6-encoding rules, suc- cessful interchange with a large 
+ * variety of readers and applications will be en- hanced if writers can 
+ * arrange for the number of pixels per line and the number of lines per strip
+ * to be multiples of eight.
+ *
+ * UncompressedMode. AlthoughT.6-encodingsofsimplebi-levelimagesresult in data
+ * compressions of 10:1 and better, some pixel-array patterns have T.6- 
+ * encodings that require more bits than their simple bi-level bitmaps. When
+ * such cases are detected by encoding procedures, there is an optional 
+ * extension for shifting to a form of uncompressed coding within the T.6-
+ * encoding string.
+ *
+ * Uncompressed mode is not well-specified and many applications discourage its
+ * usage, prefering alternatives such as different compressions on a segment-
+ * by-segment (strip or tile) basis, or by simply leaving the image 
+ * uncompressed in its entirety. The main complication for readers is in 
+ * properly restoring T.6-encoding after the uncompressed sequence is laid down
+ * in the current row.
+ *
+ * Readers that have no provision for uncompressed mode will generally reject 
+ * any case in which the flag is set. Readers that are able to process 
+ * uncompressed-mode content within T.6-encoding strings can safely ignore this
+ * flag and simply process any uncompressed-mode occurences correctly.
+ *
+ * Writers that are unable to guarantee the absence of uncompressed-mode 
+ * material in any of the T.6-encoded segments must set the flag. The flag 
+ * should be cleared (or defaulted) only when absence of uncompressed-mode
+ * material is assured. Writers that are able to inhibit the generation of
+ * uncompressed-mode extensions are encouraged to do so in order to maximize
+ * the acceptability of their T.6-encod- ing strings in interchange situations.
+ *
+ * Because uncompressed-mode is not commonly used, the following description is
+ * best taken as suggestive of the general machinery. Interpolation of fine
+ * details can easily vary between implementations.
+ *
+ * Uncompressed mode is signalled by the occurence of the 10-bit extension code
+ * string
+ *
+ * 0000001111.B
+ *
+ * outside of any run-length make-up code or extension. Original unencoded 
+ * image information follows. In this unencoded information, a 0-bit evidently
+ * signifies a white pixel, a 1-bit signifies a black pixel, and the TIFF
+ * PhotometricInterpretation will influence how these bits are mapped into any
+ * final uncompressed bitmap for use. The only modification made to the
+ * unencoded information is insertion of a 1- bit after every block of five
+ * consecutive 0-bits from the original image informa- tion. This is a
+ * transparency device that allows longer sequencences of 0-bits to be reserved
+ * for control conditions, especially ending the uncompressed-mode se- quence.
+ * When it is time to return to compressed mode, the 8-bit exit sequence
+ *
+ * 0000001t.B
+ *
+ * is appended to the material. The 0-bits of the exit sequence are not
+ * considered in applying the 1-bit insertion rule; up to four information 0-
+ * bits can legally precede the exit sequence. The trailing bit, ‘t,’ specifies
+ * the color (via 0 or 1) that is under- stood in the next run of compressed-
+ * mode encoding. This lets a color other than white be assumed for the 0-width
+ * pixel on the left of the edge between the last uncompressed pixel and the
+ * resumed 2-dimensional scan.
+ *
+ * Writers should confine uncompressed-mode sequences to the interiors of indi-
+ * vidual rows, never attempting to “wrap” from one row to the next. Readers
+ * must operate properly when the only encoding for a single row consists of an
+ * uncompressed-mode escape, a complete row of (proper 1-inserted) uncompressed
+ * information, and the extension exit. Technically, the exit pixel, ‘t,’
+ * should prob- ably then be the opposite color of the last true pixel of the
+ * row, but readers should be generous in this case.
+ *
+ * In handling these complex encodings, the encounter of material from a
+ * defective source or a corrupted file is particularly unsettling and
+ * mysterious. Robust readers will do well to defend against falling off the
+ * end of the world; e.g., unexpected EOFB sequences should be handled, and
+ * attempted access to data bytes that are not within the bounds of the present
+ * segment (or the TIFF file itself) should be avoided.
+ *
+ * These fields may be useful for document storage and retrieval applications.
+ * They will very likely be ignored by other applications.
+ */
+const T6Options = {
+	tag: 293,
+	type: LONG,
+	count: 1,
+};
+
+/**
  * The unit of measurement for XResolution and YResolution.
  *
  * To be used with XResolution and YResolution.
@@ -570,7 +817,7 @@ const GrayResponseCurve = {
  * the image at different sizes. Even if the decision is arbitrary, it might be
  * better to use dots per inch or dots per centimeter, and to pick XResolution
  * and YResolution so that the aspect ratio is correct and the maximum
- * dimension of the image is about four inches (the “four” is arbitrary.)
+ * dimension of the image is about four inches (the "four" is arbitrary.)
  *
  * 2 = Inch.
  * 3 = Centimeter.
@@ -596,7 +843,7 @@ const Software = {
 /**
  * Date and time of image creation.
  *
- * The format is: “YYYY:MM:DD HH:MM:SS”, with hours like those on a 24-hour
+ * The format is: "YYYY:MM:DD HH:MM:SS", with hours like those on a 24-hour
  * clock, and one space character between the date and the time. The length of
  * the string, including the terminating NUL, is 20 bytes.
  */
@@ -645,7 +892,7 @@ const ColorMap = {
  * a child IFD. Child images provide extra information for the parent
  * image such as a subsampled version of the parent image.
  *
- * TIFF data type 13, “IFD,” is otherwise identical to LONG, but is only used
+ * TIFF data type 13, "IFD," is otherwise identical to LONG, but is only used
  * to point to other valid IFDs.
  */
 const SubIFDs = {
@@ -681,12 +928,12 @@ const SubIFDs = {
  * because associated alpha specifies that color components are pre-multiplied
  * by the alpha component, while unassociated alpha specifies the opposite.
  *
- * By convention, extra components that are present must be stored as the “last
- * components” in each pixel. For example, if SamplesPerPixel is 4 and there is
+ * By convention, extra components that are present must be stored as the "last
+ * components" in each pixel. For example, if SamplesPerPixel is 4 and there is
  * 1 extra component, then it is located in the last component location
  * (SamplesPerPixel-1) in each pixel.
  *
- * Components designated as “extra” are just like other components in a pixel.
+ * Components designated as "extra" are just like other components in a pixel.
  * In particular, the size of such components is defined by the value of
  * the BitsPerSample field.
  *
@@ -706,6 +953,30 @@ const ExtraSamples = {
 };
 
 /**
+ * Indexed images are images where the "pixels" do not represent color values,
+ * but rather an index (usually 8-bit) into a separate color table, the
+ * ColorMap. ColorMap is required for an Indexed image.
+ *
+ * The PhotometricInterpretation type of PaletteColor may still be used, and is
+ * equivalent to specifying an RGB image with the Indexed flag set, a suitable
+ * ColorMap, and SamplesPerPixel = 1.
+ *
+ * Do not use both the Indexed flag and PhotometricInterpretation = PaletteColor
+ * for the same image.
+ *
+ * 1 = Indexed.
+ * 0 = not.
+ *
+ * Default is 0 (not indexed)
+ */
+const Indexed = {
+	tag: 346,
+	type: SHORT,
+	count: 1,
+	default: 0,
+};
+
+/**
  * XMP is an extensible way to include metadata such as meaningful descriptions
  * and titles, searchable keywords, and up-to-date author and copyright
  * information.
@@ -718,8 +989,8 @@ const XMP = {
 /**
  * Copyright notice of the person or organization that claims the copyright to
  * the image. The complete copyright statement should be listed in this field
- * including any dates and statements of claims. For example, “Copyright, John
- * Smith, 19xx. All rights reserved.”
+ * including any dates and statements of claims. For example, "Copyright, John
+ * Smith, 19xx. All rights reserved."
  */
 const Copyright = {
 	tag: 33432,
@@ -728,14 +999,17 @@ const Copyright = {
 
 module.exports = {
 	NewSubfileType,
+	SubfileType,
 	ImageWidth,
 	ImageLength,
 	BitsPerSample,
 	Compression,
 	PhotometricInterpretation,
+	Thresholding,
 	CellWidth,
 	CellLength,
 	FillOrder,
+	DocumentName,
 	ImageDescription,
 	Make,
 	Model,
@@ -753,6 +1027,8 @@ module.exports = {
 	FreeByteCounts,
 	GrayResponseUnit,
 	GrayResponseCurve,
+	T4Options,
+	T6Options,
 	ResolutionUnit,
 	Software,
 	DateTime,
@@ -761,6 +1037,7 @@ module.exports = {
 	ColorMap,
 	SubIFDs,
 	ExtraSamples,
+	Indexed,
 	XMP,
 	Copyright,
 };
